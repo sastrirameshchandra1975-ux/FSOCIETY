@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JAM 2020 - Mathematics Online Portal</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #e9ecef; margin: 0; }
+ 
+        /* Login Screen */
+        #login-overlay { position: fixed; width: 100%; height: 100%; background: #2c3e50; z-index: 1000; display: flex; justify-content: center; align-items: center; color: white; }
+        .login-card { padding: 40px; background: white; color: #333; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 350px; text-align: center; }
+        .login-card input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; }
+        .login-btn { background: #27ae60; color: white; border: none; padding: 12px 30px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+
+        /* Interface Layout */
+        #exam-container { display: none; }
+        .header { background: #1a252f; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .main-body { display: flex; height: calc(100vh - 60px); }
+
+        /* Left side: Question Area */
+        .question-content { flex: 3; padding: 40px; background: white; overflow-y: auto; position: relative; }
+        .section-tag { background: #f39c12; color: white; padding: 5px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .option-container { margin: 20px 0; }
+        .option-item { padding: 15px; border: 1px solid #eee; margin-bottom: 10px; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .option-item:hover { background: #f8f9fa; border-color: #3498db; }
+        .option-item.selected { background: #d4edda; border-color: #28a745; }
+
+        /* Right side: Sidebar Menu */
+        .sidebar-menu { flex: 1; background: #f8f9fa; border-left: 1px solid #dee2e6; padding: 20px; display: flex; flex-direction: column; }
+        .palette-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 20px; }
+        .q-box { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc; cursor: pointer; font-size: 14px; font-weight: bold; border-radius: 5px; }
+ 
+        /* State Colors */
+        .unvisited { background: #fff; color: #333; }
+        .unattempted { background: #fd7e14; color: white; border-color: #e67e22; } /* Orange */
+        .attempted { background: #28a745; color: white; border-color: #1e7e34; }    /* Green */
+
+        /* Navigation Arrows */
+        .nav-footer { position: absolute; bottom: 0; left: 0; width: 100%; padding: 20px 40px; background: #fff; border-top: 1px solid #eee; display: flex; justify-content: space-between; box-sizing: border-box; }
+        .arrow { background: #3498db; color: white; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-size: 16px; display: flex; align-items: center; }
+    </style>
+</head>
+<body>
+
+<div id="login-overlay">
+    <div class="login-card">
+        <h2 id="login-title">Candidate Login</h2>
+        <p style="font-size: 12px; color: #666;">JAM 2020 MATHEMATICS</p>
+        <input type="text" id="username" placeholder="Rachana Gamanga">
+        <input type="password" id="password" placeholder="Password (221204)">
+        <button class="login-btn" onclick="handleLogin()">Login / Resume Exam</button>
+    </div>
+</div>
+
+<div id="exam-container">
+    <div class="header">
+        <div style="font-weight: bold;">JAM 2020: MA</div>
+        <div id="timer" style="font-family: monospace; font-size: 1.2em;">180:00</div>
+        <div id="candidate-info">ID: RG221204</div>
+    </div>
+
+    <div class="main-body">
+        <div class="question-content">
+            <span class="section-tag" id="q-section">SECTION A</span>
+            <h2 id="q-number">Question 1</h2>
+            <div id="q-text" style="font-size: 18px; line-height: 1.6; margin: 20px 0;"></div>
+            <div id="options-list"></div>
+<div class="nav-footer">
+                <button class="arrow" onclick="changeQuestion(-1)">&#10094; Previous</button>
+                <button class="arrow" style="background: #27ae60;" onclick="saveAndNext()">Save & Next</button>
+                <button class="arrow" onclick="changeQuestion(1)">Next &#10095;</button>
+            </div>
+        </div>
+
+        <div class="sidebar-menu">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong>Question Palette</strong>
+                <span style="cursor: pointer;">&#9776;</span>
+            </div>
+            <div class="palette-grid" id="palette"></div>
+            <div style="margin-top: auto; padding-top: 20px;">
+                <button onclick="logout()" style="width: 100%; padding: 10px; border: 1px solid #ccc; background: none; cursor: pointer;">Logout / Exit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+&nbsp;   const EXAM\_DURATION = 180 \* 60; // 3 hours in seconds
+
+&nbsp;   let timeLeft = EXAM\_DURATION;
+
+&nbsp;   let currentIdx = 1;
+
+&nbsp;   let examData = {
+
+&nbsp;       candidate: "Rachana Gamanga",
+
+&nbsp;       id: "221204",
+
+&nbsp;       states: Array(61).fill('unvisited'), // unvisited, unattempted, attempted
+
+&nbsp;       answers: {}, // Stores selected answers
+
+&nbsp;       logs: \[]
+
+&nbsp;   };
+
+
+
+&nbsp;   function handleLogin() {
+
+&nbsp;       const u = document.getElementById("username").value;
+
+&nbsp;       const p = document.getElementById("password").value;
+
+
+
+&nbsp;       if (u === "Rachana Gamanga" \&\& p === "221204") {
+
+&nbsp;           // Check if there is a saved session in local storage
+
+&nbsp;           const saved = localStorage.getItem("exam\_session\_221204");
+
+&nbsp;           if (saved) {
+
+&nbsp;               examData = JSON.parse(saved);
+
+&nbsp;               alert("Welcome back, Rachana. Resuming your previous session.");
+
+&nbsp;           }
+
+&nbsp;           
+
+&nbsp;           document.getElementById("login-overlay").style.display = "none";
+
+&nbsp;           document.getElementById("exam-container").style.display = "block";
+
+&nbsp;           
+
+&nbsp;           initTimer();
+
+&nbsp;           renderPalette();
+
+&nbsp;           loadQuestion(currentIdx);
+
+&nbsp;           addLog("Login/Re-login performed");
+
+&nbsp;       } else {
+
+&nbsp;           alert("Error: Name or Password incorrect.");
+
+&nbsp;       }
+
+&nbsp;   }
+
+
+
+&nbsp;   function initTimer() {
+
+&nbsp;       setInterval(() => {
+
+&nbsp;           if (timeLeft > 0) {
+
+&nbsp;               timeLeft--;
+
+&nbsp;               let mins = Math.floor(timeLeft / 60);
+
+&nbsp;               let secs = timeLeft % 60;
+
+&nbsp;               document.getElementById("timer").innerText = 
+
+&nbsp;                   ${mins}:${secs < 10 ? '0' : ''}${secs};
+
+&nbsp;           }
+
+&nbsp;       }, 1000);
+
+&nbsp;   }
+
+
+
+&nbsp;   function loadQuestion(n) {
+
+&nbsp;       currentIdx = n;
+
+&nbsp;       document.getElementById("q-number").innerText = "Question " + n;
+
+&nbsp;       
+
+&nbsp;       \[span\_0](start\_span)\[span\_1](start\_span)\[span\_2](start\_span)// Determine Section based on JAM 2020 Pattern\[span\_0](end\_span)\[span\_1](end\_span)\[span\_2](end\_span)
+
+&nbsp;       let section = n <= 30 ? "SECTION A (MCQ)" : (n <= 40 ? "SECTION B (MSQ)" : "SECTION C (NAT)");
+
+&nbsp;       document.getElementById("q-section").innerText = section;
+
+
+
+&nbsp;       // Content placeholder - in a real site, you pull these from the PDF text provided
+
+&nbsp;       \[span\_3](start\_span)document.getElementById("q-text").innerText = "This is Question " + n + " of the JAM 2020 Mathematics Paper.\[span\_3](end\_span)";
+
+
+
+&nbsp;       // Mark as Unattempted (Orange) if it was unvisited
+
+&nbsp;       if (examData.states\[n] === 'unvisited') {
+
+&nbsp;           examData.states\[n] = 'unattempted';
+
+&nbsp;       }
+
+&nbsp;       
+
+&nbsp;       saveSession();
+
+&nbsp;       renderPalette();
+
+&nbsp;       addLog(Viewed Question ${n});
+
+&nbsp;   }
+
+
+
+&nbsp;   function saveAndNext() {
+
+&nbsp;       // Mark as Attempted (Green)
+
+&nbsp;       examData.states\[currentIdx] = 'attempted';
+
+&nbsp;       addLog(Attempted and Saved Question ${currentIdx});
+
+&nbsp;       if (currentIdx < 60) loadQuestion(currentIdx + 1);
+
+&nbsp;       else renderPalette();
+
+&nbsp;   }
+
+
+
+&nbsp;   function changeQuestion(dir) {
+
+&nbsp;       let newIdx = currentIdx + dir;
+
+&nbsp;       if (newIdx >= 1 \&\& newIdx <= 60) loadQuestion(newIdx);
+
+&nbsp;   }
+
+function renderPalette() {
+
+&nbsp;       const grid = document.getElementById("palette");
+
+&nbsp;       grid.innerHTML = "";
+
+&nbsp;       for (let i = 1; i <= 60; i++) {
+
+&nbsp;           let div = document.createElement("div");
+
+&nbsp;           div.className = q-box ${examData.states\[i]};
+
+&nbsp;           div.innerText = i;
+
+&nbsp;           div.onclick = () => loadQuestion(i);
+
+&nbsp;           grid.appendChild(div);
+
+&nbsp;       }
+
+&nbsp;   }
+
+
+
+&nbsp;   function saveSession() {
+
+&nbsp;       localStorage.setItem("exam\_session\_221204", JSON.stringify(examData));
+
+&nbsp;   }
+
+
+
+&nbsp;   function addLog(msg) {
+
+&nbsp;       let time = new Date().toLocaleTimeString();
+
+&nbsp;       examData.logs.push(${time}: ${msg});
+
+&nbsp;       saveSession();
+
+&nbsp;   }
+
+
+
+&nbsp;   function logout() {
+
+&nbsp;       if (confirm("Your progress is saved to ID 221204. Close exam?")) {
+
+&nbsp;           location.reload();
+
+&nbsp;       }
+
+&nbsp;   }
+
+</body>
+</html>
